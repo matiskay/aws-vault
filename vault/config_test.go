@@ -578,3 +578,107 @@ source_profile = interim
 		t.Fatalf("Expected transitive_session_tags to be empty, got %+v", baseConfig.TransitiveSessionTags)
 	}
 }
+
+
+func TestSourceIdentityFromIni(t *testing.T) {
+	// Given a profile with source_identity
+	// It should populate the configuration object with SourceIdentity
+
+	os.Unsetenv("AWS_SOURCE_IDENTITY")
+
+	// Set the configuration file
+	configurationFile := newConfigFile(t, []byte(`
+[profile dummy]
+source_identity = johndoe
+`))
+	defer os.Remove(configurationFile)
+
+	configFile, err := vault.LoadConfig(configurationFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	configLoader := &vault.ConfigLoader{File: configFile, ActiveProfile: "dummy"}
+	config, err := configLoader.LoadFromProfile("dummy")
+	if err != nil {
+		t.Fatalf("Should have found a profile: %v", err)
+	}
+
+	expectedSourceIdentity := "johndoe"
+
+	if !reflect.DeepEqual(expectedSourceIdentity, config.SourceIdentity) {
+		t.Fatalf("Expected source_identity: %+v, got %+v", expectedSourceIdentity, config.SourceIdentity)
+	}
+}
+
+func TestSourceIdentityFromEnvironment(t *testing.T) {
+	// Env wins over profile configuration
+	os.Setenv("AWS_SOURCE_IDENTITY", "johndoe2")
+	defer os.Unsetenv("AWS_SOURCE_IDENTITY")
+
+	configurationFile := newConfigFile(t, []byte(`
+[profile dummy]
+source_identity = johndoe
+`))
+	defer os.Remove(configurationFile)
+
+	configFile, err := vault.LoadConfig(configurationFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	configLoader := &vault.ConfigLoader{File: configFile, ActiveProfile: "dummy"}
+	config, err := configLoader.LoadFromProfile("dummy")
+	if err != nil {
+		t.Fatalf("Should have found a profile: %v", err)
+	}
+	expectedSourceIdentity:= "johndoe2"
+	if !reflect.DeepEqual(expectedSourceIdentity, config.SourceIdentity) {
+		t.Fatalf("Expected session_tags: %+v, got %+v", expectedSourceIdentity, config.SourceIdentity)
+	}
+}
+
+func TestSourceIdentityFromEnvironmentChainedRoles(t *testing.T) {
+	os.Setenv("AWS_SOURCE_IDENTITY", "johndoe")
+	defer os.Unsetenv("AWS_SOURCE_IDENTITY")
+
+	f := newConfigFile(t, []byte(`
+[profile base]
+
+[profile interim]
+source_identity = "johndoe1"
+source_profile = base
+
+[profile target]
+source_identity = "johndoe2"
+source_profile = interim
+`))
+	defer os.Remove(f)
+
+	configFile, err := vault.LoadConfig(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	configLoader := &vault.ConfigLoader{File: configFile, ActiveProfile: "target"}
+	config, err := configLoader.LoadFromProfile("target")
+	if err != nil {
+		t.Fatalf("Should have found a profile: %v", err)
+	}
+
+	// Testing target profile, should have values populated from environment variables
+	sourceIdentityExpected := "johndoe"
+	if !reflect.DeepEqual(sourceIdentityExpected, config.SourceIdentity) {
+		t.Fatalf("Expected source_identity: %+v, got %+v", sourceIdentityExpected, config.SourceIdentity)
+	}
+
+	// Testing interim profile, parameters should come from the config, not environment
+	interimConfig := config.SourceProfile
+	expectedSourceIdentity := "johndoe1"
+	if !reflect.DeepEqual(expectedSourceIdentity, interimConfig.SourceIdentity) {
+		t.Fatalf("Expected source_identity: %+v, got %+v", expectedSourceIdentity, interimConfig.SourceIdentity)
+	}
+
+	// Testing base profile, should have empty parameters
+	baseConfig := interimConfig.SourceProfile
+	if baseConfig.SourceIdentity != "" {
+		t.Fatalf("Expected session_tags to be empty, got %+v", baseConfig.SessionTags)
+	}
+}

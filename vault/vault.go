@@ -137,6 +137,7 @@ func NewAssumeRoleProvider(creds *credentials.Credentials, k keyring.Keyring, co
 		ExpiryWindow:      defaultExpirationWindow,
 		Tags:              config.SessionTags,
 		TransitiveTagKeys: config.TransitiveSessionTags,
+		SourceIdentity:    config.SourceIdentity,
 		Mfa: Mfa{
 			MfaSerial:       config.MfaSerial,
 			MfaToken:        config.MfaToken,

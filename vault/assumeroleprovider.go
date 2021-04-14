@@ -20,6 +20,7 @@ type AssumeRoleProvider struct {
 	ExpiryWindow      time.Duration
 	Tags              map[string]string
 	TransitiveTagKeys []string
+	SourceIdentity    string
 	Mfa
 	credentials.Expiry
 }
@@ -82,6 +83,10 @@ func (p *AssumeRoleProvider) assumeRole() (*sts.Credentials, error) {
 
 	if len(p.TransitiveTagKeys) > 0 {
 		input.TransitiveTagKeys = aws.StringSlice(p.TransitiveTagKeys)
+	}
+
+	if p.SourceIdentity != "" {
+		input.SourceIdentity = aws.String(p.SourceIdentity)
 	}
 
 	log.Printf("Using STS endpoint %s", p.StsClient.Endpoint)
